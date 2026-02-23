@@ -57,11 +57,22 @@ const SERVERS = [
   { name: "AS-Tokyo", ping: "175 мс", load: 31 },
 ];
 
-const REVIEWS = [
+const PAYMENT_METHODS = [
+  { id: "sbp", icon: "Smartphone", label: "СБП", sublabel: "Система быстрых платежей", desc: "Оплата через любой банк по номеру телефона. Без комиссии.", color: "#00c853", badge: "Без комиссии" },
+  { id: "card", icon: "CreditCard", label: "Банковская карта", sublabel: "Visa / Mastercard / МИР", desc: "Оплата картой любого банка. Комиссия 0%.", color: "#a855f7", badge: null },
+  { id: "crypto", icon: "Bitcoin", label: "Криптовалюта", sublabel: "USDT, BTC, ETH, TON", desc: "Оплата криптовалютой через CryptoBot.", color: "#f59e0b", badge: null },
+  { id: "qiwi", icon: "Wallet", label: "ЮMoney / Кошелёк", sublabel: "ЮMoney, QIWI, WebMoney", desc: "Оплата через электронный кошелёк.", color: "#00f5ff", badge: null },
+];
+
+type Review = { name: string; avatar: string; server: string; rating: number; text: string };
+
+const INITIAL_REVIEWS: Review[] = [
   { name: "Алексей К.", avatar: "⚔️", server: "120 игроков", rating: 5, text: "Работаем полгода — ни одного лага. Переехали с другого хостинга, разница огромная. Пинг у всех игроков упал ниже 10 мс." },
   { name: "Мария Г.", avatar: "🎮", server: "Семейный сервер", rating: 5, text: "Панель управления очень удобная, настроила всё за 5 минут. Техподдержка отвечает мгновенно, даже ночью!" },
   { name: "Дмитрий П.", avatar: "🏆", server: "Коммерческий сервер", rating: 5, text: "Была атака DDoS на 50 Gbps — сервер даже не дрогнул. Защита реально работает. Рекомендую всем серьёзным проектам." },
 ];
+
+const AVATARS = ["⚔️", "🎮", "🏆", "🧱", "🛡️", "🎯", "🔥", "💎", "⭐", "🐉"];
 
 const borderClass = (color: string) =>
   color === "green" ? "border-neon-green" : color === "purple" ? "border-neon-purple" : "border-neon-cyan";
@@ -72,11 +83,24 @@ const textClass = (color: string) =>
 const bgAlpha = (color: string) =>
   color === "green" ? "rgba(0,255,106,0.08)" : color === "purple" ? "rgba(168,85,247,0.08)" : "rgba(0,245,255,0.08)";
 
+type Plan = typeof PLANS[number];
+
 export default function Index() {
   const [activeSection, setActiveSection] = useState("hero");
   const [menuOpen, setMenuOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [sent, setSent] = useState(false);
+
+  // Payment modal
+  const [buyPlan, setBuyPlan] = useState<Plan | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
+  const [payStep, setPayStep] = useState<"choose" | "confirm">("choose");
+
+  // Reviews
+  const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ name: "", server: "", rating: 5, text: "", avatar: "🎮" });
+  const [reviewSent, setReviewSent] = useState(false);
 
   useEffect(() => {
     const onScroll = () => {
@@ -92,6 +116,17 @@ export default function Index() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (buyPlan) {
+      document.body.style.overflow = "hidden";
+      setSelectedPayment(null);
+      setPayStep("choose");
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [buyPlan]);
+
   const goto = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
     setMenuOpen(false);
@@ -104,8 +139,144 @@ export default function Index() {
     setTimeout(() => setSent(false), 4000);
   };
 
+  const handleReviewSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newReview: Review = {
+      name: reviewForm.name,
+      server: reviewForm.server,
+      rating: reviewForm.rating,
+      text: reviewForm.text,
+      avatar: reviewForm.avatar,
+    };
+    setReviews((prev) => [newReview, ...prev]);
+    setReviewSent(true);
+    setReviewForm({ name: "", server: "", rating: 5, text: "", avatar: "🎮" });
+    setTimeout(() => {
+      setReviewSent(false);
+      setShowReviewForm(false);
+    }, 2500);
+  };
+
+  const handlePay = () => {
+    setPayStep("confirm");
+  };
+
   return (
     <div className="min-h-screen text-white font-montserrat" style={{ backgroundColor: "var(--dark-bg)" }}>
+
+      {/* ── PAYMENT MODAL ── */}
+      {buyPlan && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(10px)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setBuyPlan(null); }}
+        >
+          <div
+            className="relative w-full max-w-md rounded-2xl p-6 animate-up"
+            style={{ background: "#0d1220", border: "1px solid rgba(0,255,106,0.25)", boxShadow: "0 0 60px rgba(0,255,106,0.1)" }}
+          >
+            {/* close */}
+            <button
+              onClick={() => setBuyPlan(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
+            >
+              <Icon name="X" size={20} />
+            </button>
+
+            {payStep === "choose" ? (
+              <>
+                <div className="mb-5">
+                  <div className="text-xs text-gray-500 font-orbitron mb-1">ОПЛАТА ТАРИФА</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">{buyPlan.emoji}</span>
+                    <span className="font-orbitron font-black text-xl text-white">{buyPlan.name}</span>
+                    <span className="ml-auto font-orbitron font-black text-2xl neon-green">{buyPlan.price}₽<span className="text-gray-400 text-sm font-normal">/мес</span></span>
+                  </div>
+                </div>
+
+                <div className="text-sm text-gray-400 font-semibold mb-3">Выбери способ оплаты:</div>
+                <div className="space-y-2 mb-5">
+                  {PAYMENT_METHODS.map((pm) => (
+                    <button
+                      key={pm.id}
+                      onClick={() => setSelectedPayment(pm.id)}
+                      className="w-full text-left rounded-xl p-3.5 flex items-center gap-3 transition-all"
+                      style={{
+                        background: selectedPayment === pm.id ? `${pm.color}14` : "rgba(255,255,255,0.03)",
+                        border: `1px solid ${selectedPayment === pm.id ? pm.color : "rgba(255,255,255,0.08)"}`,
+                        boxShadow: selectedPayment === pm.id ? `0 0 16px ${pm.color}22` : "none",
+                      }}
+                    >
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: `${pm.color}18` }}>
+                        <Icon name={pm.icon} size={18} style={{ color: pm.color }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white text-sm">{pm.label}</span>
+                          {pm.badge && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ background: `${pm.color}25`, color: pm.color }}>
+                              {pm.badge}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500">{pm.sublabel}</div>
+                      </div>
+                      {selectedPayment === pm.id && (
+                        <Icon name="CheckCircle" size={18} style={{ color: pm.color }} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedPayment && (
+                  <div className="mb-4 p-3 rounded-xl text-sm text-gray-300"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                    {PAYMENT_METHODS.find((p) => p.id === selectedPayment)?.desc}
+                  </div>
+                )}
+
+                <button
+                  onClick={handlePay}
+                  disabled={!selectedPayment}
+                  className="w-full py-3.5 rounded-xl text-sm btn-green disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                >
+                  Перейти к оплате →
+                </button>
+                <p className="text-center text-xs text-gray-600 mt-3">🔒 Безопасная оплата · Возврат в течение 24 ч</p>
+              </>
+            ) : (
+              <div className="text-center py-6">
+                <div className="text-5xl mb-4">🚀</div>
+                <div className="font-orbitron font-black text-xl neon-green mb-2">Переходим к оплате!</div>
+                <p className="text-gray-400 text-sm mb-4">
+                  Менеджер свяжется с тобой в течение 5 минут<br />и вышлет ссылку для оплаты через{" "}
+                  <span className="text-white font-semibold">
+                    {PAYMENT_METHODS.find((p) => p.id === selectedPayment)?.label}
+                  </span>
+                </p>
+                <div className="p-3 rounded-xl text-sm text-gray-300 mb-5"
+                  style={{ background: "rgba(0,255,106,0.06)", border: "1px solid rgba(0,255,106,0.2)" }}>
+                  Тариф: <span className="font-bold text-white">{buyPlan.emoji} {buyPlan.name}</span> · {buyPlan.price}₽/мес
+                </div>
+                <a
+                  href="https://t.me/crafthost_support"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-green w-full py-3.5 rounded-xl text-sm inline-block"
+                  onClick={() => setBuyPlan(null)}
+                >
+                  ✈️ Написать в Telegram
+                </a>
+                <button onClick={() => setPayStep("choose")} className="mt-3 text-xs text-gray-600 hover:text-gray-400 transition-colors">
+                  ← Изменить способ оплаты
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── NAV ── */}
       <nav className="fixed top-0 left-0 right-0 z-50" style={{ background: "rgba(7,11,20,0.92)", backdropFilter: "blur(20px)", borderBottom: "1px solid rgba(0,255,106,0.12)" }}>
@@ -236,9 +407,11 @@ export default function Index() {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => goto("contacts")}
-                  className={`w-full py-3 rounded-xl text-sm ${plan.popular ? "btn-green" : "btn-outline-purple"}`}>
-                  Выбрать план
+                <button
+                  onClick={() => setBuyPlan(plan)}
+                  className={`w-full py-3 rounded-xl text-sm ${plan.popular ? "btn-green" : "btn-outline-purple"}`}
+                >
+                  💳 Приобрести
                 </button>
               </div>
             ))}
@@ -291,13 +464,107 @@ export default function Index() {
       {/* ── REVIEWS ── */}
       <section id="reviews" className="py-24 px-4" style={{ background: "linear-gradient(180deg, var(--dark-bg) 0%, #0a101c 50%, var(--dark-bg) 100%)" }}>
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-14">
+          <div className="text-center mb-4">
             <h2 className="font-orbitron font-black text-3xl sm:text-4xl mb-3"><span className="grad-green">ОТЗЫВЫ</span></h2>
-            <p className="text-gray-400">Что говорят наши клиенты</p>
+            <p className="text-gray-400 mb-6">Что говорят наши клиенты</p>
+            <button
+              onClick={() => setShowReviewForm(!showReviewForm)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              style={{ border: "1px solid rgba(0,255,106,0.35)", background: "rgba(0,255,106,0.08)", color: "var(--neon-green)" }}
+            >
+              <Icon name={showReviewForm ? "ChevronUp" : "PenLine"} size={16} />
+              {showReviewForm ? "Свернуть" : "Оставить отзыв"}
+            </button>
           </div>
+
+          {/* Review form */}
+          {showReviewForm && (
+            <div className="max-w-xl mx-auto mb-10 animate-up">
+              <div className="rounded-2xl p-6" style={{ background: "var(--dark-card)", border: "1px solid rgba(0,255,106,0.2)" }}>
+                {reviewSent ? (
+                  <div className="text-center py-6">
+                    <div className="text-5xl mb-3">🎉</div>
+                    <div className="font-orbitron font-bold text-lg neon-green mb-1">Спасибо за отзыв!</div>
+                    <p className="text-gray-400 text-sm">Твой отзыв уже на странице</p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleReviewSubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1.5">Имя / ник</label>
+                        <input
+                          required type="text" placeholder="Steve_2024"
+                          value={reviewForm.name}
+                          onChange={(e) => setReviewForm({ ...reviewForm, name: e.target.value })}
+                          className="w-full px-3 py-2.5 rounded-lg text-white text-sm placeholder-gray-600 outline-none"
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1.5">Тип сервера</label>
+                        <input
+                          type="text" placeholder="PvP / Выживание..."
+                          value={reviewForm.server}
+                          onChange={(e) => setReviewForm({ ...reviewForm, server: e.target.value })}
+                          className="w-full px-3 py-2.5 rounded-lg text-white text-sm placeholder-gray-600 outline-none"
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-400 mb-1.5">Аватар</label>
+                      <div className="flex flex-wrap gap-2">
+                        {AVATARS.map((av) => (
+                          <button
+                            type="button" key={av}
+                            onClick={() => setReviewForm({ ...reviewForm, avatar: av })}
+                            className="w-9 h-9 rounded-lg text-lg flex items-center justify-center transition-all"
+                            style={{
+                              background: reviewForm.avatar === av ? "rgba(0,255,106,0.15)" : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${reviewForm.avatar === av ? "var(--neon-green)" : "rgba(255,255,255,0.1)"}`,
+                            }}
+                          >{av}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-400 mb-1.5">Оценка</label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <button type="button" key={s} onClick={() => setReviewForm({ ...reviewForm, rating: s })}
+                            className="text-2xl transition-transform hover:scale-110">
+                            <span style={{ color: s <= reviewForm.rating ? "#f59e0b" : "#374151" }}>★</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-400 mb-1.5">Отзыв</label>
+                      <textarea
+                        required rows={3} placeholder="Расскажи о своём опыте..."
+                        value={reviewForm.text}
+                        onChange={(e) => setReviewForm({ ...reviewForm, text: e.target.value })}
+                        className="w-full px-3 py-2.5 rounded-lg text-white text-sm placeholder-gray-600 outline-none resize-none"
+                        style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                      />
+                    </div>
+
+                    <button type="submit" className="btn-green w-full py-3 rounded-xl text-sm">
+                      Опубликовать отзыв
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Reviews grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {REVIEWS.map((r) => (
-              <div key={r.name} className="border-neon-purple rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1"
+            {reviews.map((r, i) => (
+              <div key={i} className="border-neon-purple rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1"
                 style={{ background: "var(--dark-card)" }}>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
@@ -308,7 +575,9 @@ export default function Index() {
                   </div>
                 </div>
                 <div className="flex gap-0.5 mb-3">
-                  {Array.from({ length: r.rating }).map((_, i) => <span key={i} style={{ color: "#f59e0b" }}>★</span>)}
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <span key={idx} style={{ color: idx < r.rating ? "#f59e0b" : "#374151" }}>★</span>
+                  ))}
                 </div>
                 <p className="text-gray-300 text-sm leading-relaxed">"{r.text}"</p>
               </div>
